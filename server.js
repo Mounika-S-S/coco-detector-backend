@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
-
+app.set('trust proxy', 1);
 // --- 1. CORS CONFIGURATION FIX (Final Attempt for Universal Access) ---
 
 const allowedOrigins = [
