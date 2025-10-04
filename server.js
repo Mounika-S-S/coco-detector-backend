@@ -11,7 +11,7 @@ const app = express();
 // 🚨 DEFINITIVE FIX: Allow requests from the live Vercel frontend and the Render backend itself.
 const allowedOrigins = [
     // 1. Live Vercel Frontend URL (Required for browser/mobile access)
-    'https://yolo-detector-frontend.vercel.app', 
+    'https://yolo-detector-frontend.vercel.app/', 
     // 2. Render Backend URL (Useful for Render internal health checks or testing)
     'https://yolo-detector-backend.onrender.com', 
     // 3. Localhost (Keep for local development)
