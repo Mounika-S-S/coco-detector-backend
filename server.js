@@ -24,8 +24,8 @@ app.get('/', (req, res) => {
 });
 
 // 4. API ROUTES (We will add these files later)
-// app.use('/api/auth', require('./routes/auth'));
-// app.use('/api/detect', require('./routes/detect'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/detect', require('./routes/detect'));
 
 // 5. START SERVER
 const PORT = process.env.PORT || 5000;

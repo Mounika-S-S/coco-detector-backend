@@ -20,3 +20,4 @@ Thumbs.db
 
 # Optional: If you use temporary image storage during detection
 /uploads/
+/models/yolov8n.onnx
