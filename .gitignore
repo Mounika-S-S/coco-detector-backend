@@ -1,0 +1,22 @@
+# Dependency Directories
+node_modules/
+/dist/
+/build/
+
+# Environment Variables (CRITICAL for security)
+.env
+.env.local
+.env.*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# Optional: If you use temporary image storage during detection
+/uploads/
