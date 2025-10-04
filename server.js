@@ -6,14 +6,36 @@ const cors = require('cors');
 
 const app = express();
 
-// 1. MIDDLEWARE
+// --- 1. CORS CONFIGURATION FIX ---
+
+// 🚨 DEFINITIVE FIX: Allow requests from the live Vercel frontend and the Render backend itself.
+const allowedOrigins = [
+    // 1. Live Vercel Frontend URL (Required for browser/mobile access)
+    'https://yolo-detector-frontend.vercel.app', 
+    // 2. Render Backend URL (Useful for Render internal health checks or testing)
+    'https://yolo-detector-backend.onrender.com', 
+    // 3. Localhost (Keep for local development)
+    'http://localhost:5000', 
+    'http://localhost:5173'
+];
+
 app.use(express.json()); 
-// Allow frontend to access API (change '*' to your Vercel domain later)
-app.use(cors({ origin: '*' })); 
+
+app.use(cors({ 
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps/Postman) or if the origin is in our allowed list
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Not allowed by CORS policy: ${origin}`));
+      }
+    },
+    credentials: true // Allow cookies/auth headers to be sent
+})); 
+
+// ------------------------------------
 
 // 2. DATABASE CONNECTION
-// We put this in an async IIFE to prevent server exit on failure, 
-// allowing the YOLO model load to run in the background.
 (async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI);
@@ -24,7 +46,6 @@ app.use(cors({ origin: '*' }));
 })();
 
 // 3. API ROUTES
-// We require the detect router here, which handles its own async model loading.
 app.use('/api/auth', require('./routes/auth')); 
 app.use('/api/detect', require('./routes/detect')); 
 
