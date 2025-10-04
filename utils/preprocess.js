@@ -1,36 +1,48 @@
 // coco-detector-backend/utils/preprocess.js
-const Jimp = require('jimp');
+const { loadImage, createCanvas } = require('canvas');
 
 // YOLOv8 requires a 640x640 input image
 const INPUT_SIZE = 640;
 
 /**
- * Resizes and transforms the image buffer for YOLOv8 model input.
- * @param {Buffer} buffer The image file buffer.
- * @returns {Float32Array} The normalized 1D tensor data (CHW format).
+ * Reads image buffer, resizes, and extracts normalized pixel data.
+ * @param {Buffer} buffer The image file buffer from Multer.
+ * @returns {Float32Array} The normalized 1D tensor data in CHW format.
  */
 async function preprocessImage(buffer) {
-    const img = await Jimp.read(buffer);
+    try {
+        // 1. Load the image buffer using node-canvas's loadImage
+        const image = await loadImage(buffer);
 
-    // 1. Resize to 640x640
-    img.resize(INPUT_SIZE, INPUT_SIZE);
+        // 2. Create a canvas element to perform resizing
+        const canvas = createCanvas(INPUT_SIZE, INPUT_SIZE);
+        const ctx = canvas.getContext('2d');
+        
+        // Draw the image onto the 640x640 canvas
+        ctx.drawImage(image, 0, 0, INPUT_SIZE, INPUT_SIZE);
 
-    const imageBuffer = img.bitmap.data;
-    const modelInput = new Float32Array(INPUT_SIZE * INPUT_SIZE * 3);
-    
-    // 2. Normalize (0-255 -> 0-1) and convert HWC -> CHW
-    // HWC (Height, Width, Channels) is Jimp's format
-    // CHW (Channels, Height, Width) is the model's required format
-    for (let i = 0; i < INPUT_SIZE * INPUT_SIZE; i++) {
-        // Red channel
-        modelInput[i] = imageBuffer[i * 4] / 255.0; 
-        // Green channel
-        modelInput[i + INPUT_SIZE * INPUT_SIZE] = imageBuffer[i * 4 + 1] / 255.0;
-        // Blue channel
-        modelInput[i + 2 * INPUT_SIZE * INPUT_SIZE] = imageBuffer[i * 4 + 2] / 255.0;
+        // Get pixel data from the canvas
+        const imageData = ctx.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE);
+        const data = imageData.data; // This is the HWC format (R,G,B,A...)
+
+        const modelInput = new Float32Array(INPUT_SIZE * INPUT_SIZE * 3);
+        const size = INPUT_SIZE * INPUT_SIZE;
+        
+        // 3. Normalize (0-255 -> 0-1) and convert HWC -> CHW
+        for (let i = 0; i < size; i++) {
+            // R, G, B channels (skipping the Alpha channel every 4th byte)
+            modelInput[i] = data[i * 4] / 255.0;         // Red channel
+            modelInput[i + size] = data[i * 4 + 1] / 255.0; // Green channel
+            modelInput[i + 2 * size] = data[i * 4 + 2] / 255.0; // Blue channel
+        }
+
+        return modelInput;
+        
+    } catch (error) {
+        // Log the exact error to the backend console
+        console.error("CANVAS PREPROCESSING ERROR:", error); 
+        throw new Error(`Preprocessing failed: ${error.message}. Ensure the canvas library installed correctly.`);
     }
-
-    return modelInput;
 }
 
 module.exports = { preprocessImage, INPUT_SIZE };

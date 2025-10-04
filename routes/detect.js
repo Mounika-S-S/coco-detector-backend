@@ -3,14 +3,14 @@ const express = require('express');
 const multer = require('multer');
 const { InferenceSession, Tensor } = require('onnxruntime-node');
 const path = require('path');
-const jwt = require('jsonwebtoken'); // Still needed for the 'auth' middleware
+const jwt = require('jsonwebtoken'); 
 const { preprocessImage, INPUT_SIZE } = require('../utils/preprocess');
+const { COCO_CLASSES } = require('../utils/labels'); // New Import
 
 const router = express.Router();
-// Multer setup (same as before)
 const upload = multer({ storage: multer.memoryStorage() }); 
 
-// --- Auth Middleware (Use your existing, complete code for this) ---
+// --- Auth Middleware (Requires JWT_SECRET in .env) ---
 const auth = (req, res, next) => {
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'No token, authorization denied' });
@@ -22,27 +22,27 @@ const auth = (req, res, next) => {
     }
 };
 
-// --- Model Setup (Load Once) ---
+// --- Model Setup (Load Once Asynchronously) ---
 const modelPath = path.join(__dirname, '../models/yolov8n.onnx');
 let session;
 
-// Load the session asynchronously
-InferenceSession.create(modelPath).then(s => {
-    session = s;
-    console.log("YOLOv8 ONNX model loaded successfully.");
-}).catch(e => {
-    console.error("Failed to load ONNX model. Check if yolov8n.onnx is in the models/ folder:", e);
-    // You can choose to exit the process here: process.exit(1); 
-});
+(async () => {
+    try {
+        session = await InferenceSession.create(modelPath);
+        console.log("YOLOv8 ONNX model ready for inference.");
+    } catch (e) {
+        console.error("CRITICAL: Failed to load ONNX model:", e);
+    }
+})();
 
 
-// DETECTION ROUTE
+// --- DETECTION ROUTE ---
 router.post('/', auth, upload.single('image'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ message: 'No image file uploaded.' });
     }
     if (!session) {
-        return res.status(503).json({ message: 'Model not yet loaded or failed to load.' });
+        return res.status(503).json({ message: 'Model service temporarily unavailable.' });
     }
 
     try {
@@ -51,25 +51,50 @@ router.post('/', auth, upload.single('image'), async (req, res) => {
 
         // 2. Create ONNX Tensor [1, 3, 640, 640]
         const inputTensor = new Tensor('float32', modelInput, [1, 3, INPUT_SIZE, INPUT_SIZE]);
-        
-        // Input name for YOLOv8 ONNX models is typically 'images'
         const inputFeed = { 'images': inputTensor }; 
         
         // 3. Run Inference
         const outputMap = await session.run(inputFeed);
-        
-        // Output name is typically 'output0'
         const outputTensor = outputMap.output0; 
-        
-        // --- Return RAW output for confirmation (No NMS implemented) ---
+        const outputData = outputTensor.data; 
+
+        // --- DECODING LOGIC (Identify best single object) ---
+        const NUM_CLASSES = COCO_CLASSES.length; // 80 classes
+        const NUM_PROPOSALS = outputTensor.dims[2]; // e.g., 8400
+        let maxScore = 0;
+        let detectedClassId = -1;
+
+        // Iterate through all 8400 potential prediction boxes
+        for (let i = 0; i < NUM_PROPOSALS; i++) {
+            // Check the confidence scores for this proposal
+            // The scores start at index 4 (0-3 are box coords)
+            for (let c = 0; c < NUM_CLASSES; c++) {
+                // Flattened array index: ClassScoresStart * NUM_PROPOSALS + ProposalIndex
+                const scoreIndex = (4 + c) * NUM_PROPOSALS + i; 
+                const score = outputData[scoreIndex];
+
+                if (score > maxScore) {
+                    maxScore = score;
+                    detectedClassId = c;
+                }
+            }
+        }
+
+        let topClassName = 'No Clear Object Detected (< 50% Confidence)';
+        if (maxScore > 0.5) { // Use a minimum threshold of 50%
+            topClassName = COCO_CLASSES[detectedClassId];
+        }
+
+        // 4. Return the decoded class name and confidence
         res.json({ 
-            message: 'YOLOv8 Inference successful (Raw Output Received)', 
-            detections_raw_length: outputTensor.data.length,
-            detections_raw_dims: outputTensor.dims
+            message: 'YOLO Detection Complete', 
+            top_class_name: topClassName,
+            confidence: maxScore.toFixed(2),
+            raw_output_dims: outputTensor.dims
         });
 
     } catch (err) {
-        console.error("YOLO Detection Error:", err);
+        console.error("FULL DETECTION ERROR during preprocessing or inference:", err); 
         res.status(500).json({ message: 'Server failed to process image with YOLO.' });
     }
 });
