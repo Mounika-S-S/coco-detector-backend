@@ -1,20 +1,19 @@
 // server.js
-require('dotenv').config(); // Load environment variables first
+require('dotenv').config(); 
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
 
-// --- 1. CORS CONFIGURATION FIX ---
+// --- 1. CORS CONFIGURATION FIX (Final Attempt for Universal Access) ---
 
-// 🚨 DEFINITIVE FIX: Allow requests from the live Vercel frontend and the Render backend itself.
 const allowedOrigins = [
-    // 1. Live Vercel Frontend URL (Required for browser/mobile access)
-    'https://yolo-detector-frontend.vercel.app/', 
-    // 2. Render Backend URL (Useful for Render internal health checks or testing)
+    // Live Vercel Frontend URL (Required for all browsers/mobile access)
+    'https://yolo-detector-frontend.vercel.app', 
+    // Render Backend URL (Health checks)
     'https://yolo-detector-backend.onrender.com', 
-    // 3. Localhost (Keep for local development)
+    // Localhost (for local development)
     'http://localhost:5000', 
     'http://localhost:5173'
 ];
@@ -23,19 +22,22 @@ app.use(express.json());
 
 app.use(cors({ 
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps/Postman) or if the origin is in our allowed list
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error(`Not allowed by CORS policy: ${origin}`));
+        // Send a specific error message if the origin is blocked
+        callback(new Error(`CORS Policy Blocked Origin: ${origin}`));
       }
     },
-    credentials: true // Allow cookies/auth headers to be sent
+    // Crucial: Allow the Authorization header (for JWT) and common methods
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true 
 })); 
 
 // ------------------------------------
 
-// 2. DATABASE CONNECTION
+// 2. DATABASE CONNECTION (Rest of the file remains the same)
 (async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI);
